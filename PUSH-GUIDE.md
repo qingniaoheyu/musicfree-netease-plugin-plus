@@ -1,6 +1,6 @@
 # 一键推送到 GitHub
 
-本目录已是一个完整的 Git 仓库（15 个文件，2 次提交，62 MB），**只差推送到 GitHub**。
+本目录已是一个完整的 Git 仓库（18 个文件，5 次提交，约 62 MB），**只差推送到 GitHub**。
 
 ---
 
@@ -81,6 +81,7 @@ MusicFree 网易云插件增强版 + 修复 Cookie 被覆盖缺陷的 APK | Fork
 
 ```
 README.md                          主说明
+INSTALL-GUIDE.md                   安装 / 排错完整指南
 FORK-NOTICE.md                     Fork 声明与 AGPL 合规
 CHANGELOG.md                       版本更新日志
 RELEASE-NOTES-v0.7.0.md            Release 说明
@@ -100,9 +101,9 @@ patch/build-patched-apk.yml        Actions 构建配置
 
 推送后访问 https://github.com/qingniaoheyu/musicfree-netease-plugin-plus 应该看到：
 
-- ✅ 15 个文件
+- ✅ 18 个文件
 - ✅ README 正常渲染（带 badge 和快速下载表格）
 - ✅ Actions 页面自动跑了一次 `Validate Plugin`（应该通过）
-- ✅ 提交历史有 2 条
+- ✅ 提交历史有 5 条
 
 如果 Actions 显示红色，点进去看是哪个检查失败，把日志发我。
