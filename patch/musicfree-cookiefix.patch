@@ -1,0 +1,208 @@
+﻿diff --git a/src/core/pluginManager/plugin.ts b/src/core/pluginManager/plugin.ts
+index 6a85c62..98c0edf 100644
+--- a/src/core/pluginManager/plugin.ts
++++ b/src/core/pluginManager/plugin.ts
+@@ -12,6 +12,7 @@ import { getMediaExtraProperty, patchMediaExtra } from "@/utils/mediaExtra";
+ import { getLocalPath, isSameMediaItem, resetMediaItem } from "@/utils/mediaUtils";
+ import notImplementedFunction from "@/utils/notImplementedFunction.ts";
+ import axios from "axios";
++import CookieManager from "@react-native-cookies/cookies";
+ import bigInt from "big-integer";
+ import * as cheerio from "cheerio";
+ import { satisfies } from "compare-versions";
+@@ -48,12 +49,32 @@ axios.interceptors.response.use((response) => {
+ 
+ const sha256 = CryptoJs.SHA256;
+ 
++/** 兜底：当原生 Cookie 模块不可用时，退回空实现（保持旧行为，不崩溃） */
+ const deprecatedCookieManager = {
+     get: notImplementedFunction,
+     set: notImplementedFunction,
+     flush: notImplementedFunction,
++    clearAll: notImplementedFunction,
+ };
+ 
++/**
++ * Cookie 管理器
++ * ---------------------------------------------------------------
++ * 原实现（deprecatedCookieManager）把 get/set/flush 全指向 notImplementedFunction，
++ * 导致插件**无法操作原生 Cookie 存储**。
++ *
++ * 而 RN 网络层的实际行为是：原生 Cookie 存储**非空时**，会用存储里的 Cookie
++ * 覆盖插件显式设置的 `Cookie` 请求头。于是出现：
++ *   首次请求透传成功 → 服务端回 Set-Cookie 被存入原生存储 →
++ *   之后所有请求的 Cookie 头都被替换 → 依赖 Cookie 鉴权的插件全部失效。
++ * (对应 MusicFree issue #670 / #655)
++ *
++ * 修复：暴露真实可用的 CookieManager（@react-native-cookies/cookies），
++ * 让插件可以 clearAll() 清空原生存储，使自己的 Cookie 头重新生效。
++ * 同时下面给 axios 挂了请求拦截器，为插件提供 `clearNativeCookies` 能力。
++ */
++const realCookieManager = CookieManager ?? deprecatedCookieManager;
++
+ const packages: Record<string, any> = {
+     cheerio,
+     "crypto-js": CryptoJs,
+@@ -62,16 +83,64 @@ const packages: Record<string, any> = {
+     "big-integer": bigInt,
+     qs,
+     he,
+-    "@react-native-cookies/cookies": deprecatedCookieManager,
++    "@react-native-cookies/cookies": realCookieManager,
+     webdav,
+ };
+ 
++/**
++ * 标记某个 axios 实例发起的请求「不要使用原生 Cookie 存储」。
++ * 实现方式：请求发出前清空原生存储，让 RN 不再用存储里的 Cookie 覆盖请求头。
++ */
++const nativeCookieFreeAxios = new WeakSet<object>();
++
+ const _require = (packageName: string) => {
+     let pkg = packages[packageName];
+     pkg.default = pkg;
+     return pkg;
+ };
+ 
++/**
++ * 创建「插件专用 axios 实例」。
++ *
++ * 为什么不能直接用全局 axios：全局实例被宿主自身复用，给它挂
++ * 「每个请求都清空 cookie」的拦截器会破坏宿主自己的会话。
++ * 这里用 axios.create() 生成独立实例，只给插件用。
++ *
++ * 拦截器做两件事：
++ *   1. 请求前清空原生 Cookie 存储 —— 否则 RN 会用存储里的 Cookie
++ *      覆盖插件设置的 Cookie 头（issue #670 的根因）。
++ *   2. 清空后不再有任何存储 Cookie 参与，插件头得以原样透传。
++ */
++function createPluginAxios() {
++    const instance = axios.create({ timeout: 2000 });
++
++    instance.interceptors.request.use(async (config) => {
++        try {
++            await realCookieManager.clearAll();
++        } catch (e) {
++            // 清空失败不阻断请求
++        }
++        return config;
++    });
++
++    // 复制全局实例上已有的响应拦截逻辑（统一 set-cookie 格式）
++    instance.interceptors.response.use((response) => {
++        const setCookie = response.headers["set-cookie"];
++        if (setCookie && setCookie.length === 1) {
++            const splitedCookie = setCookie[0].split(",");
++            response.headers["set-cookie"] = splitedCookie;
++            response.headers["x-set-cookie"] = setCookie;
++        }
++        return response;
++    });
++
++    return instance;
++}
++
++const pluginAxios = createPluginAxios();
++packages.axios = pluginAxios;
++nativeCookieFreeAxios.add(pluginAxios);
++
+ const _consoleBind = function (
+     method: "log" | "error" | "info" | "warn",
+     ...args: any
+diff --git a/android/app/build.gradle b/android/app/build.gradle
+index 0e1eabb..82ae85c 100644
+--- a/android/app/build.gradle
++++ b/android/app/build.gradle
+@@ -139,11 +139,20 @@ android {
+             keyPassword 'android'
+         }
+         // !! Add lines
+-         release {
+-            storeFile file(keystoreProperties['RELEASE_STORE_FILE'])
+-            storePassword keystoreProperties['RELEASE_STORE_PASSWORD']
+-            keyAlias keystoreProperties['RELEASE_KEY_ALIAS']
+-            keyPassword keystoreProperties['RELEASE_KEY_PASSWORD']
++        // 没有 keystore.properties 时（例如 fork 后自行构建），
++        // release 回退到 debug 签名，保证能产出可安装的 APK。
++        release {
++            if (keystorePropertiesFile.exists()) {
++                storeFile file(keystoreProperties['RELEASE_STORE_FILE'])
++                storePassword keystoreProperties['RELEASE_STORE_PASSWORD']
++                keyAlias keystoreProperties['RELEASE_KEY_ALIAS']
++                keyPassword keystoreProperties['RELEASE_KEY_PASSWORD']
++            } else {
++                storeFile file('debug.keystore')
++                storePassword 'android'
++                keyAlias 'androiddebugkey'
++                keyPassword 'android'
++            }
+         }
+     }
+     splits {
+diff --git a/android/settings.gradle b/android/settings.gradle
+index 6904ef9..d7f2bd7 100644
+--- a/android/settings.gradle
++++ b/android/settings.gradle
+@@ -1,5 +1,29 @@
+-pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
++pluginManagement {
++  includeBuild("../node_modules/@react-native/gradle-plugin")
++  repositories {
++    // 国内镜像优先，避免直连超时
++    maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
++    maven { url 'https://maven.aliyun.com/repository/google' }
++    maven { url 'https://maven.aliyun.com/repository/central' }
++    maven { url 'https://maven.aliyun.com/repository/public' }
++    maven { url 'https://mirrors.huaweicloud.com/repository/maven/' }
++    google()
++    mavenCentral()
++    gradlePluginPortal()
++  }
++}
+ plugins { id("com.facebook.react.settings") }
++dependencyResolutionManagement {
++  repositories {
++    maven { url 'https://maven.aliyun.com/repository/google' }
++    maven { url 'https://maven.aliyun.com/repository/central' }
++    maven { url 'https://maven.aliyun.com/repository/public' }
++    maven { url 'https://mirrors.huaweicloud.com/repository/maven/' }
++    google()
++    mavenCentral()
++    maven { url 'https://jitpack.io' }
++  }
++}
+ extensions.configure(com.facebook.react.ReactSettingsExtension){ ex ->
+   def command = [
+     'node',
+diff --git a/android/build.gradle b/android/build.gradle
+index 22017f6..5f78c9f 100644
+--- a/android/build.gradle
++++ b/android/build.gradle
+@@ -8,9 +8,13 @@ buildscript {
+         kotlinVersion = "1.9.24"
+     }
+     repositories {
+-        maven { url 'https://maven.aliyun.com/repository/central'}
+-        maven { url 'https://maven.aliyun.com/repository/public' }
++        // 国内镜像优先，避免直连 dl.google.com / repo.maven.apache.org 超时
+         maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
++        maven { url 'https://maven.aliyun.com/repository/google' }
++        maven { url 'https://maven.aliyun.com/repository/central' }
++        maven { url 'https://maven.aliyun.com/repository/public' }
++        maven { url 'https://maven.aliyun.com/repository/jcenter' }
++        maven { url 'https://mirrors.huaweicloud.com/repository/maven/' }
+         google()
+         mavenCentral()
+         maven { url 'https://jitpack.io' }
+diff --git a/package.json b/package.json
+index 0a64fd3..3543ca3 100644
+--- a/package.json
++++ b/package.json
+@@ -56,6 +56,7 @@
+     "path-browserify": "^1.0.1",
+     "qs": "^6.13.0",
+     "react": "18.3.1",
++    "@react-native-cookies/cookies": "^6.2.1",
+     "react-native": "0.76.5",
+     "react-native-background-timer": "^2.4.1",
+     "react-native-circular-progress-indicator": "^4.4.2",
