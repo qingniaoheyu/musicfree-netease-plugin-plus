@@ -929,13 +929,28 @@ async function requestOnce(path, data, useUserCookie, requireLogin, userAgent) {
     throw createError("该功能需要登录网易云账号，请在插件设置里填写有效的 Cookie");
   }
   if (result.code === -462) {
-    // 网易云风控：短时间内请求过多会要求人机验证，与插件逻辑无关。
-    // 给出可操作的三种做法，而不是只报错。
+    /**
+     * 网易云风控：短时间内请求过多会要求人机验证，与插件逻辑无关。
+     *
+     * ⚠️ 提示必须区分「有没有填 Cookie」：
+     * 游客模式下提示「重新复制 Cookie」会让用户困惑（他根本没有 Cookie），
+     * 所以这里按登录状态给不同的建议。
+     */
+    const hasCookieNow = hasAnyCookie();
+    if (hasCookieNow) {
+      throw createError(
+        "网易云风控（-462 请完成验证）。可依次尝试：\n" +
+          "① 重新复制一份 Cookie（过期的 Cookie 会让所有通道都被判异常）\n" +
+          "② 切换网络（Wi-Fi ↔ 手机流量）\n" +
+          "③ 等几分钟再重试"
+      );
+    }
     throw createError(
-      "网易云风控（-462 请完成验证）。可依次尝试：\n" +
-        "① 重新复制一份 Cookie（过期的 Cookie 会让所有通道都被判异常）\n" +
+      "网易云风控（-462 请完成验证），当前是**未登录**状态，匿名请求额度被限流了。\n" +
+        "可依次尝试：\n" +
+        "① 等几分钟再重试\n" +
         "② 切换网络（Wi-Fi ↔ 手机流量）\n" +
-        "③ 等几分钟再试"
+        "③ 填入网易云 Cookie（登录后请求额度更高，也更稳定）"
     );
   }
   const message = result.message || result.msg || "";
@@ -2760,19 +2775,74 @@ async function shouldUseAccountApi() {
 
 async function searchMusic(query, page) {
   const offset = (page - 1) * SEARCH_PAGE_SIZE;
-  const result = await weapiRequest("/weapi/cloudsearch/pc", {
-    s: query,
-    type: 1,
-    limit: SEARCH_PAGE_SIZE,
-    offset: offset,
-    total: true,
-  });
-  const data = (result.result && result.result.songs) || [];
-  const total = (result.result && result.result.songCount) || 0;
-  return {
-    isEnd: offset + data.length >= total || !data.length,
-    data: data.map(formatSearchMusicItem).filter(Boolean),
-  };
+
+  /**
+   * 搜索优先走 weapi（信息最全：专辑/时长/封面都有）。
+   *
+   * ⚠️ 但不能只有这一条路：
+   * 游客模式下 weapi 常被 -462 风控整体拦住（实测连续失败），
+   * 此时退回**明文 GET /api/search/get**（走另一套计数，通常还能用）。
+   * 虽然明文字段少一些，但「能搜到」比「字段全」重要。
+   */
+  try {
+    const result = await weapiRequest("/weapi/cloudsearch/pc", {
+      s: query,
+      type: 1,
+      limit: SEARCH_PAGE_SIZE,
+      offset: offset,
+      total: true,
+    });
+    const data = (result.result && result.result.songs) || [];
+    const total = (result.result && result.result.songCount) || 0;
+    return {
+      isEnd: offset + data.length >= total || !data.length,
+      data: data.map(formatSearchMusicItem).filter(Boolean),
+    };
+  } catch (weapiError) {
+    const msg = String((weapiError && weapiError.message) || "");
+    // 只有「风控 / 网络」这类整体性失败才值得换通道；
+    // 业务性错误（比如参数问题）换了也没用。
+    const worthRetry =
+      msg.indexOf("-462") >= 0 ||
+      msg.indexOf("风控") >= 0 ||
+      msg.indexOf("403") >= 0 ||
+      msg.indexOf("429") >= 0;
+    if (!worthRetry) {
+      throw weapiError;
+    }
+
+    // 明文回退
+    const plain = await plainApiGet(
+      "/api/search/get?s=" +
+        encodeURIComponent(query) +
+        "&type=1&limit=" +
+        SEARCH_PAGE_SIZE +
+        "&offset=" +
+        offset
+    );
+    if (plain && plain.code === 200 && plain.result) {
+      const songs = plain.result.songs || [];
+      const total = plain.result.songCount || 0;
+      return {
+        isEnd: offset + songs.length >= total || !songs.length,
+        // 明文接口字段是 album/artists/duration 风格，用对应格式化函数
+        data: songs
+          .map(function (s) {
+            return formatSearchMusicItem({
+              id: s.id,
+              name: s.name,
+              artists: s.artists || s.ar || [],
+              album: s.album || s.al || {},
+              duration: s.duration ? s.duration / 1000 : s.dt ? s.dt / 1000 : 0,
+              fee: s.fee,
+            });
+          })
+          .filter(Boolean),
+      };
+    }
+    // 明文也不通，把原始错误抛出去（带上风控说明）
+    throw weapiError;
+  }
 }
 
 async function searchAlbum(query, page) {
