@@ -1,0 +1,82 @@
+name: Validate Plugin
+
+# 每次推送插件文件时自动校验语法与基本结构
+# 防止发布出去的插件无法加载
+
+on:
+  push:
+    paths:
+      - 'plugin/**'
+      - '.github/workflows/validate-plugin.yml'
+  pull_request:
+    paths:
+      - 'plugin/**'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Syntax check
+        run: |
+          echo "=== 语法检查 ==="
+          node --check plugin/musicfree-netease-plugin.js
+          echo "✅ 语法 OK"
+
+      - name: Structure check
+        run: |
+          echo "=== 结构检查 ==="
+          node -e "
+          const fs = require('fs');
+          const code = fs.readFileSync('plugin/musicfree-netease-plugin.js', 'utf8');
+          const checks = [
+            ['platform', /platform:\s*[\"']网易云音乐[\"']/, '平台名必须是「网易云音乐」（媒体身份主键，不能改）'],
+            ['author', /author:\s*[\"']qingniaoheyu[\"']/, '作者应为 qingniaoheyu'],
+            ['version', /version:\s*[\"']\d+\.\d+\.\d+[\"']/, '必须有语义化版本号'],
+            ['description', /description:/, '必须有 description'],
+            ['userVariables', /userVariables:/, '必须有 userVariables'],
+            ['supportedSearchType', /supportedSearchType:/, '必须有 supportedSearchType'],
+          ];
+          let failed = 0;
+          for (const [name, re, hint] of checks) {
+            if (re.test(code)) {
+              console.log('  ✅ ' + name);
+            } else {
+              console.log('  ❌ ' + name + ' — ' + hint);
+              failed++;
+            }
+          }
+          // 关键功能点检查
+          const features = [
+            ['v3 每日推荐接口', /api\/v3\/discovery\/recommend\/songs/],
+            ['全部歌单导入', /input === \"all\"/],
+            ['我的歌单标签', /__my_sheets_tag__/],
+            ['B站回退', /getBiliMediaSource/],
+            ['并行探活', /Promise\.all/],
+          ];
+          console.log('');
+          console.log('=== 功能点检查 ===');
+          for (const [name, re] of features) {
+            if (re.test(code)) console.log('  ✅ ' + name);
+            else { console.log('  ❌ ' + name); failed++; }
+          }
+          if (failed > 0) { console.error('\n共 ' + failed + ' 项检查失败'); process.exit(1); }
+          console.log('\n全部检查通过');
+          "
+
+      - name: Verify no secrets committed
+        run: |
+          echo "=== 检查是否误提交了凭证 ==="
+          if grep -nE 'MUSIC_U=[A-Za-z0-9]{20,}|__csrf=[a-f0-9]{20,}' plugin/musicfree-netease-plugin.js | grep -v 'MUSIC_U=" +\|getCookieValue\|MUSIC_U=xxxxx' ; then
+            echo "❌ 插件里可能硬编码了真实 Cookie！"
+            exit 1
+          fi
+          echo "✅ 未发现硬编码凭证"

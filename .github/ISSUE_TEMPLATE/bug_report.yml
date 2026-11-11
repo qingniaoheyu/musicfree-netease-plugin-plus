@@ -1,0 +1,88 @@
+name: 问题反馈 / Bug Report
+description: 插件或 APK 使用中遇到的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！请尽量填完整，特别是**插件版本**和**是否用了本仓库的修复版 APK**，
+        这两项能排除 90% 的「Cookie 不生效」类问题。
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: 问题出在哪
+      options:
+        - 插件（plugin/musicfree-netease-plugin.js）
+        - 修复版 APK（release/*.apk）
+        - 两者都有
+        - 不确定
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本
+      description: 打开插件说明（?）最上方的「构建版本」那一行，例如 `v0.7.0 · 2026-11-11 21:40`
+      placeholder: "v0.7.0 · 2026-11-11 21:40"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: apk
+    attributes:
+      label: 是否使用本仓库的修复版 APK
+      description: 官方原版 APK 存在 Cookie 被覆盖的缺陷（上游 issue #670），必须用本仓库的版本才能保证 Cookie 生效
+      options:
+        - 是，用的是本仓库 release 里的 APK
+        - 不是，用的是官方原版
+        - 不确定
+    validations:
+      required: true
+
+  - type: dropdown
+    id: cookie
+    attributes:
+      label: 是否填写了网易云 Cookie
+      options:
+        - 填了，且能正常读到账号
+        - 填了，但显示「读不到账号」
+        - 没填
+    validations:
+      required: true
+
+  - type: input
+    id: android
+    attributes:
+      label: 安卓版本 / 机型
+      placeholder: "Android 14 / 小米 13"
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 问题描述
+      description: 具体现象是什么？期望是什么？
+      placeholder: |
+        现象：
+        期望：
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 xxx
+        2. 点击 xxx
+        3. 出现 xxx
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 截图 / 日志
+      description: 插件说明（?）里的诊断信息很有用，可以直接截图

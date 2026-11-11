@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 上游项目问题
+    url: https://github.com/maotoumao/MusicFree/issues
+    about: 如果是 MusicFree 本身（非本仓库改动）的问题，请到上游仓库反馈
+  - name: 上游官方文档
+    url: https://musicfree.catcat.work
+    about: 插件协议、使用说明等官方文档

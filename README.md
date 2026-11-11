@@ -1,8 +1,28 @@
 # MusicFree 网易云音乐插件（增强版）+ Cookie 修复版 APK
 
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
+[![Plugin Version](https://img.shields.io/badge/plugin-v0.7.0-green.svg)](./plugin/musicfree-netease-plugin.js)
+[![APK](https://img.shields.io/badge/APK-0.6.2--CookieFix-orange.svg)](./release)
+[![Fork](https://img.shields.io/badge/fork%20of-maotoumao%2FMusicFree-lightgrey.svg)](https://github.com/maotoumao/MusicFree)
+
 > **作者：qingniaoheyu**
 > 本仓库是对 [maotoumao/MusicFree](https://github.com/maotoumao/MusicFree) 的**社区 fork 增强**，
 > 提供：① 功能增强的网易云音乐插件 ② 修复了 Cookie 覆盖缺陷的 MusicFree APK。
+
+## 🚀 快速开始
+
+| 我要… | 下载 |
+|---|---|
+| **装插件**（已有可用 APK） | [plugin/musicfree-netease-plugin.js](./plugin/musicfree-netease-plugin.js) |
+| **装修复版 APK**（不确定机型） | [MusicFree-0.6.2-CookieFix-universal.apk](./release/MusicFree-0.6.2-CookieFix-universal.apk) （28.1 MB） |
+| 装修复版 APK（现代手机） | [MusicFree-0.6.2-CookieFix-arm64-v8a.apk](./release/MusicFree-0.6.2-CookieFix-arm64-v8a.apk) （17.3 MB） |
+| 装修复版 APK（老旧 32 位） | [MusicFree-0.6.2-CookieFix-armeabi-v7a.apk](./release/MusicFree-0.6.2-CookieFix-armeabi-v7a.apk) （16.1 MB） |
+| **只看改动代码** | [patch/musicfree-cookiefix.patch](./patch/musicfree-cookiefix.patch) |
+
+**三步上手**：
+1. 装 APK（需先卸载官方版）
+2. 装插件（插件管理 → 从本地安装）
+3. 设置 → 基本设置 → 「点击专辑内单曲时」→ 选 **「播放专辑」** ← 别漏这步
 
 ---
 
