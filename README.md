@@ -11,6 +11,8 @@
 
 ## 🚀 快速开始
 
+> 📦 **推荐**：直接到 [**Releases / v0.7.0**](https://github.com/qingniaoheyu/musicfree-netease-plugin-plus/releases/tag/v0.7.0) 下载打好包的插件 + 三个 APK + 源码补丁，一步到位。
+
 | 我要… | 下载 |
 |---|---|
 | **装插件**（已有可用 APK） | [plugin/musicfree-netease-plugin.js](./plugin/musicfree-netease-plugin.js) |
