@@ -19,6 +19,8 @@
 | 装修复版 APK（老旧 32 位） | [MusicFree-0.6.2-CookieFix-armeabi-v7a.apk](./release/MusicFree-0.6.2-CookieFix-armeabi-v7a.apk) （16.1 MB） |
 | **只看改动代码** | [patch/musicfree-cookiefix.patch](./patch/musicfree-cookiefix.patch) |
 
+> 📖 **遇到问题先看**：[安装与排障完整指南](./INSTALL-GUIDE.md)（APK 装不上 / Cookie 读不到 / 跳歌 / 导入失败都能查）
+
 **三步上手**：
 1. 装 APK（需先卸载官方版）
 2. 装插件（插件管理 → 从本地安装）
